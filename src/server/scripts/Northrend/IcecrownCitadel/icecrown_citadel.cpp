@@ -1319,7 +1319,7 @@ struct npc_argent_captainAI : public ScriptedAI
                 }
 
                 Talk(SAY_CAPTAIN_RESURRECTED);
-				me->UpdateEntry(newEntry, me->GetCreatureData());
+                me->UpdateEntry(newEntry, me->GetCreatureData());
                 DoCast(me, SPELL_UNDEATH, true);
             }
         }
@@ -1800,7 +1800,7 @@ class spell_icc_sprit_alarm : public SpellScriptLoader
                 }
 
                 if (GameObject* trap = GetCaster()->FindNearestGameObject(trapId, 5.0f))
-                    trap->SetRespawnTime(trap->GetGOInfo()->trap.autoCloseTime);
+                    trap->SetRespawnTime(trap->GetGOInfo()->GetAutoCloseTime());
 
                 std::list<Creature*> wards;
                 GetCaster()->GetCreatureListWithEntryInGrid(wards, NPC_DEATHBOUND_WARD, 150.0f);

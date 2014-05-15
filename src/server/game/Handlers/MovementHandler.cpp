@@ -356,8 +356,8 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
         plrMover->SetInWater(!plrMover->IsInWater() || plrMover->GetBaseMap()->IsUnderWater(movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ()));
     }
 
-	if (plrMover)
-		sAnticheatMgr->StartHackDetection(plrMover, movementInfo, opcode);
+    if (plrMover)
+        sAnticheatMgr->StartHackDetection(plrMover, movementInfo, opcode);
 
     uint32 mstime = getMSTime();
     /*----------------------*/
@@ -390,7 +390,7 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recvData)
 
         plrMover->UpdateFallInformationIfNeed(movementInfo, opcode);
 
-        if (movementInfo.pos.GetPositionZ() < -500.0f)
+        if (movementInfo.pos.GetPositionZ() < -500.0f || (plrMover->GetBattleground() && plrMover->GetBattleground()->IsPlayerUnderMap(_player)))
         {
             if (!(plrMover->GetBattleground() && plrMover->GetBattleground()->HandlePlayerUnderMap(_player)))
             {

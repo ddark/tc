@@ -526,7 +526,7 @@ void GameObject::Update(uint32 diff)
             {
                 case GAMEOBJECT_TYPE_DOOR:
                 case GAMEOBJECT_TYPE_BUTTON:
-                    if (GetGOInfo()->GetAutoCloseTime() && (m_cooldownTime < time(NULL)))
+                    if (m_cooldownTime && (m_cooldownTime < time(NULL)))
                         ResetDoorOrButton();
                     break;
                 case GAMEOBJECT_TYPE_GOOBER:
@@ -1100,7 +1100,7 @@ void GameObject::UseDoorOrButton(uint32 time_to_restore, bool alternative /* = f
     SwitchDoorOrButton(true, alternative);
     SetLootState(GO_ACTIVATED, user);
 
-    m_cooldownTime = time(NULL) + time_to_restore;
+    m_cooldownTime = time_to_restore ? (time(NULL) + time_to_restore) : 0;
 }
 
 void GameObject::SetGoArtKit(uint8 kit)

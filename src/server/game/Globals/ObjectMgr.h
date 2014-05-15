@@ -1026,7 +1026,7 @@ class ObjectMgr
 
         void LoadNPCSpellClickSpells();
 
-		void LoadCreatureOutfits();
+        void LoadCreatureOutfits();
         void LoadGameTele();
 
         void LoadGossipMenu();
@@ -1051,7 +1051,7 @@ class ObjectMgr
         CreatureBaseStats const* GetCreatureBaseStats(uint8 level, uint8 unitClass);
 
         void SetHighestGuids();
-        uint64 GenerateLowGuid(HighGuid guidhigh);
+        uint32 GenerateLowGuid(HighGuid guidhigh);
         uint32 GenerateAuctionID();
         uint64 GenerateEquipmentSetGuid();
         uint32 GenerateMailID();
@@ -1235,7 +1235,7 @@ class ObjectMgr
         bool AddGameTele(GameTele& data);
         bool DeleteGameTele(std::string const& name);
 
-		CreatureOutfitContainer* GetCreatureOutfitMap() { return &_creatureOutfitStore; }
+        CreatureOutfitContainer* GetCreatureOutfitMap() { return &_creatureOutfitStore; }
 
         TrainerSpellData const* GetNpcTrainerSpells(uint32 entry) const
         {
@@ -1381,7 +1381,7 @@ class ObjectMgr
         PageTextContainer _pageTextStore;
         InstanceTemplateContainer _instanceTemplateStore;
 
-		CreatureOutfitContainer _creatureOutfitStore;
+        CreatureOutfitContainer _creatureOutfitStore;
 
     private:
         void LoadScripts(ScriptsType type);

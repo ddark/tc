@@ -416,7 +416,7 @@ class Battleground
         void SendPacketToAll(WorldPacket* packet);
         void YellToAll(Creature* creature, const char* text, uint32 language);
 
-		void SendChatMessage(Creature* source, uint8 textId, WorldObject* target = NULL);
+        void SendChatMessage(Creature* source, uint8 textId, WorldObject* target = NULL);
 
         template<class Do>
         void BroadcastWorker(Do& _do);
@@ -482,7 +482,7 @@ class Battleground
         virtual void EventPlayerClickedOnFlag(Player* /*player*/, GameObject* /*target_obj*/) { }
         void EventPlayerLoggedIn(Player* player);
         void EventPlayerLoggedOut(Player* player);
-		virtual void ProcessEvent(WorldObject* /*obj*/, uint32 /*eventId*/, WorldObject* /*invoker*/ = NULL) { }
+        virtual void ProcessEvent(WorldObject* /*obj*/, uint32 /*eventId*/, WorldObject* /*invoker*/ = NULL) { }
 
         // this function can be used by spell to interact with the BG map
         virtual void DoAction(uint32 /*action*/, uint64 /*var*/) { }
@@ -509,7 +509,7 @@ class Battleground
         BGCreatures BgCreatures;
         void SpawnBGObject(uint32 type, uint32 respawntime);
         virtual bool AddObject(uint32 type, uint32 entry, float x, float y, float z, float o, float rotation0, float rotation1, float rotation2, float rotation3, uint32 respawnTime = 0);
-		bool AddObject(uint32 type, uint32 entry, Position const& pos, float rotation0, float rotation1, float rotation2, float rotation3, uint32 respawnTime = 0);
+        bool AddObject(uint32 type, uint32 entry, Position const& pos, float rotation0, float rotation1, float rotation2, float rotation3, uint32 respawnTime = 0);
         virtual Creature* AddCreature(uint32 entry, uint32 type, float x, float y, float z, float o, TeamId teamId = TEAM_NEUTRAL, uint32 respawntime = 0);
         Creature* AddCreature(uint32 entry, uint32 type, Position const& pos, TeamId teamId = TEAM_NEUTRAL, uint32 respawntime = 0);
         bool DelCreature(uint32 type);
@@ -524,6 +524,7 @@ class Battleground
         const char* GetTrinityString(int32 entry);
 
         virtual bool HandlePlayerUnderMap(Player* /*player*/) { return false; }
+        virtual bool IsPlayerUnderMap(Player* /*player*/) { return false; }
 
         // since arenas can be AvA or Hvh, we have to get the "temporary" team of a player
         uint32 GetPlayerTeam(uint64 guid) const;

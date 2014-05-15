@@ -54,7 +54,7 @@ namespace Trinity
             {
                 BroadcastText const* bct = sObjectMgr->GetBroadcastText(_textId);
 
-				ChatHandler::BuildChatPacket(data, _msgType, bct ? Language(bct->Language) : LANG_UNIVERSAL, _player, _player, bct ? bct->GetText(locale, _player->getGender()) : "", _achievementId);
+                ChatHandler::BuildChatPacket(data, _msgType, bct ? Language(bct->Language) : LANG_UNIVERSAL, _player, _player, bct ? bct->GetText(locale, _player->getGender()) : "", _achievementId);
             }
 
         private:
@@ -1875,6 +1875,9 @@ bool AchievementMgr::IsCompletedAchievement(AchievementEntry const* entry)
 
 CriteriaProgress* AchievementMgr::GetCriteriaProgress(AchievementCriteriaEntry const* entry)
 {
+    if (m_criteriaProgress.empty())
+        return NULL;
+
     CriteriaProgressMap::iterator iter = m_criteriaProgress.find(entry->ID);
 
     if (iter == m_criteriaProgress.end())
