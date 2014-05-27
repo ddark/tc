@@ -30,7 +30,7 @@
 #include "Unit.h"
 #include "Util.h"
 #include "Group.h"
-#include "Opcodes.h"
+#include "WorldSession.h"
 
 #define PET_XP_FACTOR 0.05f
 
@@ -256,6 +256,11 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
     SetReactState(ReactStates(fields[6].GetUInt8()));
     SetCanModifyStats(true);
 
+    InitTalentForLevel();                                   // set original talents points before spell loading
+
+    uint32 timediff = uint32(time(NULL) - fields[14].GetUInt32());
+    _LoadAuras(timediff);
+
     if (getPetType() == SUMMON_PET && !current)              //all (?) summon pets come with full health when called, but not when they are current
         SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
     else
@@ -312,11 +317,6 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
 
     owner->SetMinion(this, true);
     map->AddToMap(this->ToCreature());
-
-    InitTalentForLevel();                                   // set original talents points before spell loading
-
-    uint32 timediff = uint32(time(NULL) - fields[14].GetUInt32());
-    _LoadAuras(timediff);
 
     // load action bar, if data broken will fill later by default spells.
     if (!isTemporarySummon)
@@ -638,6 +638,24 @@ void Pet::Update(uint32 diff)
         default:
             break;
     }
+
+    //start custom code
+    if (GetMapId() == 631)
+    {
+        if (GetOwner())
+        {
+            if (GetOwner()->HasAura(73828))
+                AddAura(73828, this);
+            else if (GetOwner()->HasAura(73822))
+                AddAura(73822, this);
+        }
+    }
+    else if (HasAura(73828))
+        RemoveAura(73828);
+    else if (HasAura(73822))
+        RemoveAura(73822);
+    //end custom code
+
     Creature::Update(diff);
 }
 
@@ -958,6 +976,7 @@ bool Guardian::InitStatsForLevel(uint8 petlevel)
                 m_modSpellHitChance = m_owner->m_modSpellHitChance;
                 float ownerHaste = ((Player*)m_owner)->GetRatingBonusValue(CR_HASTE_MELEE);
                 ApplyAttackTimePercentMod(BASE_ATTACK, ownerHaste, true);
+                ApplyCastTimePercentMod(ownerHaste, true);
                 break;
             }
             default:

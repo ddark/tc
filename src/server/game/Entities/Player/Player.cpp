@@ -146,6 +146,8 @@ enum CharacterCustomizeFlags
 
 static uint32 copseReclaimDelay[MAX_DEATH_COUNT] = { 30, 60, 120 };
 
+uint32 const MAX_MONEY_AMOUNT = static_cast<uint32>(std::numeric_limits<int32>::max());
+
 // == PlayerTaxi ================================================
 
 PlayerTaxi::PlayerTaxi()
@@ -6804,14 +6806,14 @@ void Player::SendMessageToSetInRange(WorldPacket* data, float dist, bool self, b
     VisitNearbyWorldObject(dist, notifier);
 }
 
-void Player::SendMessageToSet(WorldPacket* data, Player const* skipped_rcvr)
+void Player::SendMessageToSet(WorldPacket* data, Player const* skipped_rcvr, bool enemy_only)
 {
     if (skipped_rcvr != this)
         GetSession()->SendPacket(data);
 
     // we use World::GetMaxVisibleDistance() because i cannot see why not use a distance
     // update: replaced by GetMap()->GetVisibilityDistance()
-    Trinity::MessageDistDeliverer notifier(this, data, GetVisibilityRange(), false, skipped_rcvr);
+    Trinity::MessageDistDeliverer notifier(this, data, GetVisibilityRange(), false, skipped_rcvr, enemy_only);
     VisitNearbyWorldObject(GetVisibilityRange(), notifier);
 }
 
@@ -7171,6 +7173,7 @@ bool Player::RewardHonor(Unit* victim, uint32 groupsize, int32 honor, bool pvpto
 
     uint64 victim_guid = 0;
     uint32 victim_rank = 0;
+    uint32 rank_diff = 0;
 
     // need call before fields update to have chance move yesterday data to appropriate fields before today data change.
     UpdateHonorFields();
@@ -7213,22 +7216,60 @@ bool Player::RewardHonor(Unit* victim, uint32 groupsize, int32 honor, bool pvpto
             //  title[1..14]  -> rank[5..18]
             //  title[15..28] -> rank[5..18]
             //  title[other]  -> 0
+            // PLAYER__FIELD_KNOWN_TITLES describe which titles player can use,
+            // so we must find biggest pvp title , even for killer to find extra honor value
+            uint32 vtitle = victim->GetUInt32Value(PLAYER__FIELD_KNOWN_TITLES);
+            //uint32 victim_title = 0;
+            uint32 ktitle = GetUInt32Value(PLAYER__FIELD_KNOWN_TITLES);
+            uint32 killer_title = 0;
+            if (PLAYER_TITLE_MASK_ALL_PVP & ktitle)
+            {
+                for (int i = ((GetTeam() == ALLIANCE) ? 1:HKRANKMAX);i!=((GetTeam() == ALLIANCE) ? HKRANKMAX : (2*HKRANKMAX-1));i++)
+                {
+                    if (ktitle & (1<<i))
+                        killer_title = i;
+                }
+            }
+            if (PLAYER_TITLE_MASK_ALL_PVP & vtitle)
+            {
+                for (int i = ((plrVictim->GetTeam() == ALLIANCE) ? 1:HKRANKMAX);i!=((plrVictim->GetTeam() == ALLIANCE) ? HKRANKMAX : (2*HKRANKMAX-1));i++)
+                {
+                    if (vtitle & (1<<i))
+                        victim_title = i;
+                }
+            }
+
+            // Get Killer titles, CharTitlesEntry::bit_index
+            // Ranks:
+            //  title[1..14]  -> rank[5..18]
+            //  title[15..28] -> rank[5..18]
+            //  title[other]  -> 0
             if (victim_title == 0)
                 victim_guid = 0;                        // Don't show HK: <rank> message, only log.
-            else if (victim_title < 15)
+            else if (victim_title < HKRANKMAX)
                 victim_rank = victim_title + 4;
-            else if (victim_title < 29)
-                victim_rank = victim_title - 14 + 4;
+            else if (victim_title < (2*HKRANKMAX-1))
+                victim_rank = victim_title - (HKRANKMAX-1) + 4;
             else
                 victim_guid = 0;                        // Don't show HK: <rank> message, only log.
 
+            // now find rank difference
+            if (killer_title == 0 && victim_rank>4)
+                rank_diff = victim_rank - 4;
+            else if (killer_title < HKRANKMAX)
+                rank_diff = (victim_rank>(killer_title + 4))? (victim_rank - (killer_title + 4)) : 0;
+            else if (killer_title < (2*HKRANKMAX-1))
+                rank_diff = (victim_rank>(killer_title - (HKRANKMAX-1) +4))? (victim_rank - (killer_title - (HKRANKMAX-1) + 4)) : 0;
+
             honor_f = ceil(Trinity::Honor::hk_honor_at_level_f(k_level) * (v_level - k_grey) / (k_level - k_grey));
+            honor *= 1 + sWorld->getRate(RATE_PVP_RANK_EXTRA_HONOR)*(((float)rank_diff) / 10.0f);
 
             // count the number of playerkills in one day
             ApplyModUInt32Value(PLAYER_FIELD_KILLS, 1, true);
             // and those in a lifetime
             ApplyModUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS, 1, true);
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EARN_HONORABLE_KILL);
+            UpdateKnownTitles();
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HK_CLASS, victim->getClass());
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HK_RACE, victim->getRace());
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA, GetAreaId());
@@ -7322,6 +7363,30 @@ void Player::SetArenaPoints(uint32 value)
     SetUInt32Value(PLAYER_FIELD_ARENA_CURRENCY, value);
     if (value)
         AddKnownCurrency(ITEM_ARENA_POINTS_ID);
+}
+
+void Player::UpdateKnownTitles()
+{
+    uint32 new_title = 0;
+    uint32 honor_kills = GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS);
+    uint32 old_title = GetUInt32Value(PLAYER_CHOSEN_TITLE);
+    RemoveFlag64(PLAYER__FIELD_KNOWN_TITLES,PLAYER_TITLE_MASK_ALL_PVP);
+    if (honor_kills < 0)
+        return;
+    bool max_rank = ((honor_kills >= sWorld->pvp_ranks[HKRANKMAX-1]) ? true : false);
+    for (int i = HKRANK01; i != HKRANKMAX; ++i)
+    {
+        if (honor_kills < sWorld->pvp_ranks[i] || (max_rank))
+        {
+            new_title = ((max_rank) ? (HKRANKMAX-1) : (i-1));
+            if (new_title > 0)
+                new_title += ((GetTeam() == ALLIANCE) ? 0 : (HKRANKMAX-1));
+            break;
+        }
+    }
+    SetFlag64(PLAYER__FIELD_KNOWN_TITLES,uint64(1) << new_title);
+    if (old_title > 0 && old_title < (2*HKRANKMAX-1) && new_title > old_title)
+        SetUInt32Value(PLAYER_CHOSEN_TITLE,new_title);
 }
 
 void Player::ModifyHonorPoints(int32 value, SQLTransaction* trans /*=NULL*/)
@@ -7491,6 +7556,19 @@ void Player::UpdateArea(uint32 newArea)
     }
     else
         RemoveByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY);
+
+    uint32 const areaRestFlag = (GetTeam() == ALLIANCE) ? AREA_FLAG_REST_ZONE_ALLIANCE : AREA_FLAG_REST_ZONE_HORDE;
+    if (area && area->flags & areaRestFlag)
+    {
+        SetFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
+        SetRestType(REST_TYPE_IN_FACTION_AREA);
+        InnEnter(time(0), GetMapId(), 0, 0, 0);
+    }
+    else if (HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) && GetRestType() == REST_TYPE_IN_FACTION_AREA)
+    {
+        RemoveFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
+        SetRestType(REST_TYPE_NO);
+    }
 }
 
 void Player::UpdateZone(uint32 newZone, uint32 newArea)
@@ -7576,8 +7654,9 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
                     SetRestType(REST_TYPE_NO);
                 }
             }
-            else                                             // Recently left a capital city
+            else if (GetRestType() != REST_TYPE_IN_FACTION_AREA) // handled in UpdateArea
             {
+                // Recently left a capital city
                 RemoveFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
                 SetRestType(REST_TYPE_NO);
             }
@@ -8212,7 +8291,12 @@ void Player::_ApplyWeaponDependentAuraDamageMod(Item* item, WeaponAttackType att
     {
         HandleStatModifier(unitMod, unitModType, float(aura->GetAmount()), apply);
         if (unitModType == TOTAL_VALUE)
-            ApplyModUInt32Value(PLAYER_FIELD_MOD_DAMAGE_DONE_POS, aura->GetAmount(), apply);
+        {
+            if (aura->GetAmount() > 0)
+                ApplyModUInt32Value(PLAYER_FIELD_MOD_DAMAGE_DONE_POS, aura->GetAmount(), apply);
+            else
+                ApplyModUInt32Value(PLAYER_FIELD_MOD_DAMAGE_DONE_NEG, aura->GetAmount(), apply);
+        }
     }
 }
 
@@ -22769,7 +22853,7 @@ bool Player::ModifyMoney(int32 amount, bool sendError /*= true*/)
         SetMoney (GetMoney() > uint32(-amount) ? GetMoney() + amount : 0);
     else
     {
-        if (GetMoney() < uint32(MAX_MONEY_AMOUNT - amount))
+        if (GetMoney() < MAX_MONEY_AMOUNT - static_cast<uint32>(amount))
             SetMoney(GetMoney() + amount);
         else
         {
@@ -24056,7 +24140,7 @@ uint32 Player::GetBaseWeaponSkillValue (WeaponAttackType attType) const
     return GetBaseSkillValue(skill);
 }
 
-void Player::ResurectUsingRequestData()
+void Player::ResurrectUsingRequestData()
 {
     /// Teleport before resurrecting by player, otherwise the player might get attacked from creatures near his corpse
     TeleportTo(m_resurrectMap, m_resurrectX, m_resurrectY, m_resurrectZ, GetOrientation());

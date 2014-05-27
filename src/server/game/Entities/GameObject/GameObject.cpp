@@ -267,7 +267,7 @@ bool GameObject::Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMa
             if (GetGOInfo()->trap.stealthed)
             {
                 m_stealth.AddFlag(STEALTH_TRAP);
-                m_stealth.AddValue(STEALTH_TRAP, 70);
+                m_stealth.AddValue(STEALTH_TRAP, 50);
             }
 
             if (GetGOInfo()->trap.invisible)
@@ -312,8 +312,7 @@ void GameObject::Update(uint32 diff)
                         // Hardcoded tooltip value
                         m_cooldownTime = time(NULL) + 10;
                     else if (Unit* owner = GetOwner())
-                        if (owner->IsInCombat())
-                            m_cooldownTime = time(NULL) + goInfo->trap.startDelay;
+                        m_cooldownTime = time(NULL);
 
                     SetLootState(GO_READY);
                     break;
@@ -483,9 +482,9 @@ void GameObject::Update(uint32 diff)
 
                     // Pointer to appropriate target if found any
                     Unit* target = NULL;
-
+                    Unit* owner = GetOwner();
                     /// @todo this hack with search required until GO casting not implemented
-                    if (Unit* owner = GetOwner())
+                    if (owner)
                     {
                         // Hunter trap: Search units which are unfriendly to the trap's owner
                         Trinity::AnyUnfriendlyNoTotemUnitInObjectRangeCheck checker(this, owner, radius);
@@ -505,7 +504,11 @@ void GameObject::Update(uint32 diff)
                     }
 
                     if (target)
+                    {
+                        if (owner && target->IsInCombat() && m_cooldownTime + goInfo->trap.startDelay >= time(NULL))
+                            break;
                         SetLootState(GO_ACTIVATED, target);
+                    }
 
                 }
                 else if (uint32 max_charges = goInfo->GetCharges())
@@ -561,7 +564,7 @@ void GameObject::Update(uint32 diff)
                         CastSpell(NULL, goInfo->trap.spellId);
                         SetLootState(GO_JUST_DEACTIVATED);
                     }
-                    else if (Unit* target = Unit::GetUnit(*this, m_lootStateUnitGUID))
+                    else if (Unit* target = ObjectAccessor::GetUnit(*this, m_lootStateUnitGUID))
                     {
                         // Some traps do not have a spell but should be triggered
                         if (goInfo->trap.spellId)
@@ -2013,6 +2016,10 @@ void GameObject::SetLootState(LootState state, Unit* unit)
     m_lootStateUnitGUID = unit ? unit->GetGUID() : 0;
     AI()->OnStateChanged(state, unit);
     sScriptMgr->OnGameObjectLootStateChanged(this, state, unit);
+
+    if (GetGoType() == GAMEOBJECT_TYPE_DOOR) // only set collision for doors on SetGoState
+        return;
+
     if (m_model)
     {
         bool collision = false;

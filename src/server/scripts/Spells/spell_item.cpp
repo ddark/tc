@@ -1035,6 +1035,8 @@ class spell_item_shadowmourne : public SpellScriptLoader
             {
                 if (GetTarget()->HasAura(SPELL_SHADOWMOURNE_CHAOS_BANE_BUFF)) // cant collect shards while under effect of Chaos Bane buff
                     return false;
+                if (!eventInfo.GetDamageInfo()->GetSpellInfo() && roll_chance_f(80))
+                    return false;
                 return eventInfo.GetProcTarget() && eventInfo.GetProcTarget()->IsAlive();
             }
 
@@ -2231,7 +2233,8 @@ class spell_item_nitro_boots : public SpellScriptLoader
             void HandleDummy(SpellEffIndex /* effIndex */)
             {
                 Unit* caster = GetCaster();
-                caster->CastSpell(caster, roll_chance_i(95) ? SPELL_NITRO_BOOTS_SUCCESS : SPELL_NITRO_BOOTS_BACKFIRE, true, GetCastItem());
+                bool success = caster->GetMap()->IsDungeon() || roll_chance_i(95);
+                caster->CastSpell(caster, success ? SPELL_NITRO_BOOTS_SUCCESS : SPELL_NITRO_BOOTS_BACKFIRE, true, GetCastItem());
             }
 
             void Register() override

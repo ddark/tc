@@ -259,7 +259,7 @@ void Spell::EffectResurrectNew(SpellEffIndex effIndex)
 
     Player* target = unitTarget->ToPlayer();
 
-    if (target->isRessurectRequested())       // already have one active request
+    if (target->isResurrectRequested())       // already have one active request
         return;
 
     uint32 health = damage;
@@ -565,7 +565,7 @@ void Spell::EffectSchoolDMG(SpellEffIndex effIndex)
                         if (uint32 combo = player->GetComboPoints())
                         {
                             float ap = m_caster->GetTotalAttackPowerValue(BASE_ATTACK);
-                            damage += irand(int32(ap * combo * 0.03f), int32(ap * combo * 0.07f));
+                            damage += int32(ap * combo * 0.07f);
 
                             // Eviscerate and Envenom Bonus Damage (item set effect)
                             if (m_caster->HasAura(37169))
@@ -685,45 +685,6 @@ void Spell::EffectDummy(SpellEffIndex effIndex)
     // selection by spell family
     switch (m_spellInfo->SpellFamilyName)
     {
-        case SPELLFAMILY_GENERIC:
-            switch (m_spellInfo->Id)
-            {
-                case 58984: //shadowmeld
-                {
-                    if (!m_caster)
-                        return;
-
-                    m_caster->InterruptSpell(CURRENT_AUTOREPEAT_SPELL); // break Auto Shot and autohit
-                    m_caster->InterruptSpell(CURRENT_CHANNELED_SPELL);  // break channeled spells
-
-                    bool instant_exit = true;
-                    if (Player *pCaster = m_caster->ToPlayer()) // if is a creature instant exits combat, else check if someone in party is in combat in visibility distance
-                        {
-                        uint64 myGUID = pCaster->GetGUID();
-                        float visibilityRange = pCaster->GetMap()->GetVisibilityRange();
-                        if (Group *pGroup = pCaster->GetGroup())
-                        {
-                            const Group::MemberSlotList membersList = pGroup->GetMemberSlots();
-                            for (Group::member_citerator itr=membersList.begin(); itr!=membersList.end() && instant_exit; ++itr)
-                                if (itr->guid != myGUID)
-                                    if (Player *GroupMember = Unit::GetPlayer(*pCaster, itr->guid))
-                                        if (GroupMember->IsInCombat() && pCaster->GetMap()==GroupMember->GetMap() && pCaster->IsWithinDistInMap(GroupMember, visibilityRange))
-                                            instant_exit = false;
-                        }
-
-                        pCaster->SendAttackSwingCancelAttack();
-                        }
-                    if (!m_caster->GetInstanceScript() || !m_caster->GetInstanceScript()->IsEncounterInProgress()) //Don't leave combat if you are in combat with a boss
-                        {
-                        if (!instant_exit)
-                            m_caster->getHostileRefManager().deleteReferences(); // exit combat after 6 seconds
-                        else 
-                            m_caster->CombatStop(); // isn't necessary to call AttackStop because is just called in CombatStop
-                    }
-                    return;
-                }
-            }
-            break;
         case SPELLFAMILY_PALADIN:
             switch (m_spellInfo->Id)
             {
@@ -4617,7 +4578,7 @@ void Spell::EffectResurrect(SpellEffIndex effIndex)
 
     Player* target = unitTarget->ToPlayer();
 
-    if (target->isRessurectRequested())       // already have one active request
+    if (target->isResurrectRequested())       // already have one active request
         return;
 
     uint32 health = target->CountPctFromMaxHealth(damage);
@@ -4674,9 +4635,129 @@ void Spell::EffectLeap(SpellEffIndex /*effIndex*/)
     if (!m_targets.HasDst())
         return;
 
-    Position pos = destTarget->GetPosition();
-    pos = unitTarget->GetFirstCollisionPosition(unitTarget->GetDistance(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ() + 2.0f), 0.0f);
-    unitTarget->NearTeleportTo(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation(), unitTarget == m_caster);
+    if (m_spellInfo && (m_spellInfo->Id == 1953) && m_caster && unitTarget && unitTarget->GetTypeId() == TYPEID_PLAYER)    // Blink
+    {
+        float dis = 20; //vzdalenost
+        if (m_caster->ToPlayer() && m_caster->ToPlayer()->HasSpell(56365)) //Glyph of Blink
+            dis = 25;
+
+        // Start Info //
+        float cx, cy, cz;
+        float dx, dy, dz, zz;
+        float angle = unitTarget->GetOrientation();
+        unitTarget->GetPosition(cx, cy, cz);  // Start poloha
+
+        bool useVmap = false;
+        bool swapZone = true;
+        if (VMAP::VMapFactory::createOrGetVMapManager()->isHeightCalcEnabled()) // test Vmap
+            useVmap = true;
+
+        // Pri vyskoku/gripu apod zacneme na zemi..
+        if (cz - m_caster->GetMap()->GetHeight(cx, cy, cz, useVmap) < 5)
+            unitTarget->UpdateGroundPositionZ(cx, cy, cz);
+
+        dz = cz;
+        float bx, by, bz; // na zapamatovani posledniho pevneho bodu
+        bool air = false;
+
+        for (float i = 0.5f; i<dis; i += 0.5f) // posun dopredu po 0.5 yardu
+        {
+            if (!air)
+            {
+                bx = cx;
+                by = cy;
+                bz = cz;
+            }
+
+            unitTarget->GetNearPoint2D(dx, dy, i, angle);
+            zz = m_caster->GetMap()->GetHeight(dx, dy, cz, useVmap);
+
+            if ((zz - cz) < 2.0f && (zz - cz) > -2.0f)
+                dz = zz;
+
+            if ((zz - cz) < 2.0f && (unitTarget->IsWithinLOS(dx, dy, dz)))
+            {
+                if (air)
+                {
+                    if ((zz - cz) > -2.0f)
+                    {
+                        cx = dx;
+                        cy = dy;
+                        cz = dz;
+                        air = false;
+                    }
+                    else
+                    {
+                        cx = dx;
+                        cy = dy;
+                        cz = dz;
+                    }
+                }
+                else
+                {
+                    if ((zz - cz) > -2.0f)
+                    {
+                        cx = dx;
+                        cy = dy;
+                        cz = dz;
+                    }
+                    else
+                    {
+                        cx = dx;
+                        cy = dy;
+                        cz = dz;
+                        air = true;
+                    }
+                }
+            }
+            else
+            {
+                //Na hranicich map muzou blbnout vmapy
+                if (swapZone)
+                {
+                    // zkusit bez nich / s nima pokud se to obracene nepovedlo
+                    swapZone = false;
+                    useVmap = !useVmap;
+                    i -= 0.5f;
+                }
+                else
+                {
+                    // kdyz nic z toho nevyjde tak vyuzijem posledni souradnice
+                    dz += 0.5f;
+                    break;
+                }
+            }
+        }
+
+        uint32 mapid = m_caster->GetMapId();
+
+        //Nakonec postavit na zem a portnout
+        if (cz - m_caster->GetMap()->GetHeight(cx, cy, cz, useVmap) > 4)
+        {
+            cx = bx - 2.0f * cos(angle);
+            cy = by - 2.0f * sin(angle);
+            cz = bz;
+
+            if (cz - m_caster->GetMap()->GetHeight(cx, cy, cz, useVmap) < 3)
+            {
+                unitTarget->UpdateGroundPositionZ(cx, cy, cz);
+                unitTarget->ToPlayer()->TeleportTo(mapid, cx, cy, cz, unitTarget->GetOrientation(), TELE_TO_NOT_LEAVE_COMBAT | TELE_TO_NOT_UNSUMMON_PET | (unitTarget == m_caster ? TELE_TO_SPELL : 0));
+                return;
+            }
+        }
+
+        if (bz - m_caster->GetMap()->GetHeight(bx, by, bz, useVmap) < 7)
+            unitTarget->UpdateGroundPositionZ(bx, by, bz);
+
+        unitTarget->ToPlayer()->TeleportTo(mapid, bx, by, bz, unitTarget->GetOrientation(), TELE_TO_NOT_LEAVE_COMBAT | TELE_TO_NOT_UNSUMMON_PET | (unitTarget == m_caster ? TELE_TO_SPELL : 0));
+
+    }
+    else
+    {
+        Position pos = destTarget->GetPosition();
+        pos = unitTarget->GetFirstCollisionPosition(unitTarget->GetDistance(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ() + 2.0f), 0.0f);
+        unitTarget->NearTeleportTo(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation(), unitTarget == m_caster);
+    }
 }
 
 void Spell::EffectReputation(SpellEffIndex effIndex)
@@ -4733,7 +4814,7 @@ void Spell::EffectForceDeselect(SpellEffIndex /*effIndex*/)
 
     WorldPacket data(SMSG_CLEAR_TARGET, 8);
     data << uint64(m_caster->GetGUID());
-    m_caster->SendMessageToSet(&data, true);
+    m_caster->SendMessageToSet(&data, NULL,true);
 }
 
 void Spell::EffectSelfResurrect(SpellEffIndex effIndex)
