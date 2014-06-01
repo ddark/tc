@@ -17,6 +17,7 @@
 
 #include "ObjectMgr.h"
 #include "ScriptMgr.h"
+#include "Group.h"
 #include "ScriptedCreature.h"
 #include "SpellScript.h"
 #include "SpellAuraEffects.h"
@@ -528,6 +529,8 @@ class boss_the_lich_king : public CreatureScript
                 _necroticPlagueStack = 0;
                 _vileSpiritExplosions = 0;
                 SetEquipmentSlots(true);
+                ImmuneTimer = 0;
+                SetImmuneToTaunt(false);
             }
 
             void JustDied(Unit* /*killer*/) override
@@ -1020,7 +1023,9 @@ class boss_the_lich_king : public CreatureScript
                                 events.SetPhase(PHASE_THREE);
                             break;
                         case EVENT_VILE_SPIRITS:
+                            SetImmuneToTaunt(true);
                             me->GetMap()->SetZoneMusic(AREA_THE_FROZEN_THRONE, MUSIC_SPECIAL);
+                            ImmuneTimer = 1000;
                             DoCastAOE(SPELL_VILE_SPIRITS);
                             events.ScheduleEvent(EVENT_VILE_SPIRITS, urand(35000, 40000), EVENT_GROUP_VILE_SPIRITS, PHASE_THREE);
                             break;
@@ -1128,6 +1133,11 @@ class boss_the_lich_king : public CreatureScript
                     }
                 }
 
+                if (ImmuneTimer > diff)
+                    ImmuneTimer -= diff;
+                else
+                    SetImmuneToTaunt(false);
+
                 DoMeleeAttackIfReady();
             }
 
@@ -1140,6 +1150,7 @@ class boss_the_lich_king : public CreatureScript
         private:
             uint32 _necroticPlagueStack;
             uint32 _vileSpiritExplosions;
+            uint32 ImmuneTimer;
         };
 
         CreatureAI* GetAI(Creature* creature) const override
@@ -1211,8 +1222,11 @@ class npc_tirion_fordring_tft : public CreatureScript
                     SetEquipmentSlots(true);    // remove glow on ashbringer
             }
 
-            void sGossipSelect(Player* /*player*/, uint32 sender, uint32 action) override
+            void sGossipSelect(Player* player, uint32 sender, uint32 action) override
             {
+                if ((!player->GetGroup() || !player->GetGroup()->IsLeader(player->GetGUID())) && !player->IsGameMaster())
+                me->MonsterWhisper("You are not the raid leader", player, true);
+                else
                 if (me->GetCreatureTemplate()->GossipMenuId == sender && !action)
                 {
                     _events.SetPhase(PHASE_INTRO);
