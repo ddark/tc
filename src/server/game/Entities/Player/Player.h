@@ -1720,7 +1720,7 @@ class Player : public Unit, public GridObject<Player>
         bool IsGroupVisibleFor(Player const* p) const;
         bool IsInSameGroupWith(Player const* p) const;
         bool IsInSameRaidWith(Player const* p) const;
-        void UninviteFromGroup(Group* group);
+        void UninviteFromGroup();
         static void RemoveFromGroup(Group* group, uint64 guid, RemoveMethod method = GROUP_REMOVEMETHOD_DEFAULT, uint64 kicker = 0, const char* reason = NULL);
         void RemoveFromGroup(RemoveMethod method = GROUP_REMOVEMETHOD_DEFAULT) { RemoveFromGroup(GetGroup(), GetGUID(), method); }
         void SendUpdateToOutOfRangeGroupMembers();
@@ -2331,6 +2331,8 @@ class Player : public Unit, public GridObject<Player>
         std::string GetCoordsMapAreaAndZoneString();
         bool m_clicked;
         int32 timeDiff;
+
+        bool IsLoading() const;
 
     protected:
         // Gamemaster whisper whitelist

@@ -32,6 +32,7 @@
 #include "WorldPacket.h"
 #include "Cryptography/BigNumber.h"
 #include "AccountMgr.h"
+#include <unordered_set>
 
 class Creature;
 class GameObject;
@@ -728,7 +729,6 @@ class WorldSession
         void HandleCompleteCinematic(WorldPacket& recvPacket);
         void HandleNextCinematicCamera(WorldPacket& recvPacket);
 
-        void HandlePageQuerySkippedOpcode(WorldPacket& recvPacket);
         void HandlePageTextQueryOpcode(WorldPacket& recvPacket);
 
         void HandleTutorialFlag (WorldPacket& recvData);
@@ -937,7 +937,6 @@ class WorldSession
             public:
                 DosProtection(WorldSession* s) : Session(s), _policy((Policy)sWorld->getIntConfig(CONFIG_PACKET_SPOOF_POLICY)) { }
                 bool EvaluateOpcode(WorldPacket& p, time_t time) const;
-                void AllowOpcode(uint16 opcode, bool allow) { _isOpcodeAllowed[opcode] = allow; }
             protected:
                 enum Policy
                 {
@@ -946,22 +945,11 @@ class WorldSession
                     POLICY_BAN,
                 };
 
-                bool IsOpcodeAllowed(uint16 opcode) const
-                {
-                    OpcodeStatusMap::const_iterator itr = _isOpcodeAllowed.find(opcode);
-                    if (itr == _isOpcodeAllowed.end())
-                        return true;    // No presence in the map indicates this is the first time the opcode was sent this session, so allow
-
-                    return itr->second;
-                }
-
                 uint32 GetMaxPacketCounterAllowed(uint16 opcode) const;
 
                 WorldSession* Session;
 
             private:
-                typedef std::unordered_map<uint16, bool> OpcodeStatusMap;
-                OpcodeStatusMap _isOpcodeAllowed; // could be bool array, but wouldn't be practical for game versions with non-linear opcodes
                 Policy _policy;
                 typedef std::unordered_map<uint16, PacketCounter> PacketThrottlingMap;
                 // mark this member as "mutable" so it can be modified even in const functions
@@ -974,6 +962,8 @@ class WorldSession
     private:
         // private trade methods
         void moveItems(Item* myItems[], Item* hisItems[]);
+
+        bool CanUseBank(uint64 bankerGUID = 0) const;
 
         // logging helper
         void LogUnexpectedOpcode(WorldPacket* packet, const char* status, const char *reason);
@@ -1021,6 +1011,9 @@ class WorldSession
         bool isRecruiter;
         ACE_Based::LockedQueue<WorldPacket*, ACE_Thread_Mutex> _recvQueue;
         rbac::RBACData* _RBACData;
+        uint32 expireTime;
+        bool forceExit;
+        uint64 m_currentBankerGUID;
 
         WorldSession(WorldSession const& right) = delete;
         WorldSession& operator=(WorldSession const& right) = delete;

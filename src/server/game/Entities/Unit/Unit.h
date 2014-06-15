@@ -28,7 +28,7 @@
 #include "Object.h"
 #include "SpellAuraDefines.h"
 #include "ThreatManager.h"
-
+#include "ace/Thread_Mutex.h"
 #define WORLD_TRIGGER   12999
 
 enum SpellInterruptFlags
@@ -1973,13 +1973,15 @@ class Unit : public WorldObject
         Unit* GetMagicHitRedirectTarget(Unit* victim, SpellInfo const* spellInfo);
         Unit* GetMeleeHitRedirectTarget(Unit* victim, SpellInfo const* spellInfo = NULL);
 
-        int32 SpellBaseDamageBonusDone(SpellSchoolMask schoolMask) const;
-        int32 SpellBaseDamageBonusTaken(SpellSchoolMask schoolMask) const;
+        int32  SpellBaseDamageBonusDone(SpellSchoolMask schoolMask) const;
+        int32  SpellBaseDamageBonusTaken(SpellSchoolMask schoolMask) const;
         uint32 SpellDamageBonusDone(Unit* victim, SpellInfo const* spellProto, uint32 pdamage, DamageEffectType damagetype, uint32 stack = 1) const;
+        float  SpellDamagePctDone(Unit* victim, SpellInfo const* spellProto, DamageEffectType damagetype) const;
         uint32 SpellDamageBonusTaken(Unit* caster, SpellInfo const* spellProto, uint32 pdamage, DamageEffectType damagetype, uint32 stack = 1) const;
-        int32 SpellBaseHealingBonusDone(SpellSchoolMask schoolMask) const;
-        int32 SpellBaseHealingBonusTaken(SpellSchoolMask schoolMask) const;
+        int32  SpellBaseHealingBonusDone(SpellSchoolMask schoolMask) const;
+        int32  SpellBaseHealingBonusTaken(SpellSchoolMask schoolMask) const;
         uint32 SpellHealingBonusDone(Unit* victim, SpellInfo const* spellProto, uint32 healamount, DamageEffectType damagetype, uint32 stack = 1) const;
+        float SpellHealingPctDone(Unit* victim, SpellInfo const* spellProto) const;
         uint32 SpellHealingBonusTaken(Unit* caster, SpellInfo const* spellProto, uint32 healamount, DamageEffectType damagetype, uint32 stack = 1) const;
 
         uint32 MeleeDamageBonusDone(Unit* pVictim, uint32 damage, WeaponAttackType attType, SpellInfo const* spellProto = NULL);
@@ -1987,7 +1989,8 @@ class Unit : public WorldObject
 
         bool   isSpellBlocked(Unit* victim, SpellInfo const* spellProto, WeaponAttackType attackType = BASE_ATTACK);
         bool   isBlockCritical();
-        bool   isSpellCrit(Unit* victim, SpellInfo const* spellProto, SpellSchoolMask schoolMask, WeaponAttackType attackType = BASE_ATTACK) const;
+        bool   IsSpellCrit(Unit* victim, SpellInfo const* spellProto, SpellSchoolMask schoolMask, WeaponAttackType attackType = BASE_ATTACK) const;
+        float  GetUnitSpellCriticalChance(Unit* victim, SpellInfo const* spellProto, SpellSchoolMask schoolMask, WeaponAttackType attackType = BASE_ATTACK) const;
         uint32 SpellCriticalDamageBonus(SpellInfo const* spellProto, uint32 damage, Unit* victim);
         uint32 SpellCriticalHealingBonus(SpellInfo const* spellProto, uint32 damage, Unit* victim);
 
@@ -2153,6 +2156,8 @@ class Unit : public WorldObject
         time_t GetLastDamagedTime() const { return _lastDamagedTime; }
         void SetLastDamagedTime(time_t val) { _lastDamagedTime = val; }
 
+        int32 GetHighestExclusiveSameEffectSpellGroupValue(AuraEffect const* aurEff, AuraType auraType, bool sameMiscValue = false) const;
+
     protected:
         explicit Unit (bool isWorldObject);
 
@@ -2196,6 +2201,7 @@ class Unit : public WorldObject
         AuraMap::iterator m_auraUpdateIterator;
         uint32 m_removedAurasCount;
 
+        ACE_Thread_Mutex UnitAuraLock;
         AuraEffectList m_modAuras[TOTAL_AURAS];
         AuraList m_scAuras;                        // cast singlecast auras
         AuraApplicationList m_interruptableAuras;  // auras which have interrupt mask applied on unit

@@ -279,7 +279,9 @@ bool Group::AddInvite(Player* player)
 
     RemoveInvite(player);
 
+    GroupMtx.acquire();
     m_invitees.insert(player);
+    GroupMtx.release();
 
     player->SetGroupInvite(this);
 
@@ -300,39 +302,65 @@ bool Group::AddLeaderInvite(Player* player)
 
 void Group::RemoveInvite(Player* player)
 {
-    if (player && player->GetGroup() == this)
+#ifdef WIN32
+    if (GroupMtx.acquire())
+        #else
+        // this should only time out if group is no longer available and is deleted
+        // mtx should be released anywhere else correctly
+        ACE_Time_Value* aceTime = new ACE_Time_Value(time(NULL), 100000);
+    if (GroupMtx.acquire(aceTime) != -1)
+#endif
     {
         m_invitees.erase(player);
-        player->SetGroupInvite(NULL);
+        GroupMtx.release();
     }
+    // can be set even if mtx is locked
+    player->SetGroupInvite(NULL);
+#ifndef WIN32
+    delete aceTime;
+#endif
 }
 
 void Group::RemoveAllInvites()
 {
+    GroupMtx.acquire();
     for (InvitesList::iterator itr=m_invitees.begin(); itr != m_invitees.end(); ++itr)
         if (*itr)
             (*itr)->SetGroupInvite(NULL);
 
     m_invitees.clear();
+    GroupMtx.release();
 }
 
 Player* Group::GetInvited(uint64 guid) const
 {
+    GroupMtx.acquire();
     for (InvitesList::const_iterator itr = m_invitees.begin(); itr != m_invitees.end(); ++itr)
     {
         if ((*itr) && (*itr)->GetGUID() == guid)
-            return (*itr);
+        {
+            Player* plr = *itr;
+            GroupMtx.release();
+            return plr;
+        }
     }
+    GroupMtx.release();
     return NULL;
 }
 
 Player* Group::GetInvited(const std::string& name) const
 {
+    GroupMtx.acquire();
     for (InvitesList::const_iterator itr = m_invitees.begin(); itr != m_invitees.end(); ++itr)
     {
         if ((*itr) && (*itr)->GetName() == name)
-            return (*itr);
+        {
+            Player* plr = *itr;
+            GroupMtx.release();
+            return plr;
+        }
     }
+    GroupMtx.release();
     return NULL;
 }
 
