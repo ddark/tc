@@ -280,7 +280,10 @@ bool Group::AddInvite(Player* player)
     RemoveInvite(player);
 
     GroupMtx.acquire();
-    m_invitees.insert(player);
+    std::pair<uint64, std::string> p;
+    p.first = player->GetGUID();
+    p.second = player->GetName();
+    m_invitees.insert(p);
     GroupMtx.release();
 
     player->SetGroupInvite(this);
@@ -300,18 +303,20 @@ bool Group::AddLeaderInvite(Player* player)
     return true;
 }
 
-void Group::RemoveInvite(Player* player)
+bool Group::RemoveInvite(Player* player)
 {
-#ifdef WIN32
-    if (GroupMtx.acquire())
-        #else
-        // this should only time out if group is no longer available and is deleted
-        // mtx should be released anywhere else correctly
-        ACE_Time_Value* aceTime = new ACE_Time_Value(time(NULL), 100000);
+    bool ret = false;
+#ifndef WIN32
+    // this should only time out if group is no longer available and is deleted
+    // mtx should be released anywhere else correctly
+    ACE_Time_Value* aceTime = new ACE_Time_Value(time(NULL), 100000);
     if (GroupMtx.acquire(aceTime) != -1)
+#else
+    if (GroupMtx.acquire() != -1)
 #endif
     {
-        m_invitees.erase(player);
+        m_invitees.erase(player->GetGUID());
+        ret = true;
         GroupMtx.release();
     }
     // can be set even if mtx is locked
@@ -319,14 +324,16 @@ void Group::RemoveInvite(Player* player)
 #ifndef WIN32
     delete aceTime;
 #endif
+    return ret;
 }
 
 void Group::RemoveAllInvites()
 {
     GroupMtx.acquire();
     for (InvitesList::iterator itr=m_invitees.begin(); itr != m_invitees.end(); ++itr)
-        if (*itr)
-            (*itr)->SetGroupInvite(NULL);
+        if (Player* plr = ObjectAccessor::FindPlayer(itr->first))
+            plr->SetGroupInvite(NULL);
+
 
     m_invitees.clear();
     GroupMtx.release();
@@ -337,9 +344,9 @@ Player* Group::GetInvited(uint64 guid) const
     GroupMtx.acquire();
     for (InvitesList::const_iterator itr = m_invitees.begin(); itr != m_invitees.end(); ++itr)
     {
-        if ((*itr) && (*itr)->GetGUID() == guid)
+        if (itr->first == guid)
         {
-            Player* plr = *itr;
+            Player* plr = ObjectAccessor::FindPlayer(itr->first);
             GroupMtx.release();
             return plr;
         }
@@ -353,9 +360,9 @@ Player* Group::GetInvited(const std::string& name) const
     GroupMtx.acquire();
     for (InvitesList::const_iterator itr = m_invitees.begin(); itr != m_invitees.end(); ++itr)
     {
-        if ((*itr) && (*itr)->GetName() == name)
+        if (itr->second == name)
         {
-            Player* plr = *itr;
+            Player* plr = ObjectAccessor::FindPlayer(itr->first);
             GroupMtx.release();
             return plr;
         }
@@ -1600,7 +1607,7 @@ void Group::UpdatePlayerOutOfRange(Player* player)
     for (GroupReference* itr = GetFirstMember(); itr != NULL; itr = itr->next())
     {
         member = itr->GetSource();
-        if (member && !member->IsWithinDist(player, member->GetSightRange(), false))
+        if (member && member != player && (!member->IsInMap(player) || !member->IsWithinDist(player, member->GetSightRange(), false)))
             member->GetSession()->SendPacket(&data);
     }
 }

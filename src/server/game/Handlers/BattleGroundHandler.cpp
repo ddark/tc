@@ -309,7 +309,7 @@ void WorldSession::HandlePVPLogDataOpcode(WorldPacket & /*recvData*/)
         return;
 
     WorldPacket data;
-    sBattlegroundMgr->BuildPvpLogDataPacket(&data, bg);
+    bg->BuildPvPLogDataPacket(data);
     SendPacket(&data);
 
     TC_LOG_DEBUG("network", "WORLD: Sent MSG_PVP_LOG_DATA Message");
@@ -349,6 +349,21 @@ void WorldSession::HandleBattleFieldPortOpcode(WorldPacket &recvData)
     uint8 action;                                           // enter battle 0x1, leave queue 0x0
 
     recvData >> type >> unk2 >> bgTypeId_ >> unk >> action;
+
+	if (_player->isSpectator())
+	{
+		if (Battleground* arena = _player->GetBattleground())
+		{
+			WorldPacket data;
+			uint32 queueSlot = 0;
+			sBattlegroundMgr->BuildBattlegroundStatusPacket(&data, arena, queueSlot, STATUS_NONE, 0, 0, 0, 0);
+			arena->RemoveSpectator(_player->GetGUID());
+			_player->CancelSpectate();
+			_player->TeleportToBGEntryPoint();
+			return;
+		}
+	}
+
     if (!sBattlemasterListStore.LookupEntry(bgTypeId_))
     {
         TC_LOG_DEBUG("bg.battleground", "CMSG_BATTLEFIELD_PORT %s ArenaType: %u, Unk: %u, BgType: %u, Action: %u. Invalid BgType!",
@@ -453,6 +468,71 @@ void WorldSession::HandleBattleFieldPortOpcode(WorldPacket &recvData)
             _player->CleanupAfterTaxiFlight();
         }
 
+        // In case there is same number of alliance and horde players
+		_player->SetTeam(ginfo.Team);
+		_player->SetBGTeam(ginfo.Team);
+		
+		// Cross-faction BG stuff
+		if (bg->isBattleground())
+		{
+			if (ginfo.Players.size() > 1)
+			{
+				if (!_player->_fakeLeader)
+				{
+					for (std::map<uint64, PlayerQueueInfo*>::const_iterator citer = ginfo.Players.begin(); citer != ginfo.Players.end(); ++citer)
+						if (Player* tmpPlr = sObjectAccessor->FindPlayer(citer->first))
+						tmpPlr->_fakeLeader = _player;
+					
+						if (bg->GetPlayersCountByTeam(HORDE) < bg->GetMaxPlayersPerTeam() && bg->GetPlayersCountByTeam(HORDE) < bg->GetPlayersCountByTeam(ALLIANCE))
+						{
+						_player->SetTeam(HORDE);
+						_player->SetBGTeam(HORDE);
+						}
+					else if (bg->GetPlayersCountByTeam(ALLIANCE) < bg->GetMaxPlayersPerTeam() && bg->GetPlayersCountByTeam(ALLIANCE) < bg->GetPlayersCountByTeam(HORDE))
+						{
+						_player->SetTeam(ALLIANCE);
+						_player->SetBGTeam(ALLIANCE);
+						}
+				}
+				else
+				{
+					_player->SetTeam(_player->_fakeLeader->GetTeam());
+					_player->SetBGTeam(_player->_fakeLeader->GetBGTeam());
+				}
+			}
+			else
+			{
+				if (_player->_fakeLeader)
+				{
+					_player->SetTeam(_player->_fakeLeader->GetTeam());
+					_player->SetBGTeam(_player->_fakeLeader->GetBGTeam());
+				}
+				else
+				{
+					if (bg->GetPlayersCountByTeam(HORDE) < bg->GetMaxPlayersPerTeam() && bg->GetPlayersCountByTeam(HORDE) < bg->GetPlayersCountByTeam(ALLIANCE))
+					{
+						_player->SetTeam(HORDE);
+						_player->SetBGTeam(HORDE);
+					}
+					else if (bg->GetPlayersCountByTeam(ALLIANCE) < bg->GetMaxPlayersPerTeam() && bg->GetPlayersCountByTeam(ALLIANCE) < bg->GetPlayersCountByTeam(HORDE))
+					{
+						_player->SetTeam(ALLIANCE);
+						_player->SetBGTeam(ALLIANCE);
+					}
+				}
+			}
+			bg->UpdatePlayersCountByTeam(_player->GetTeam(), false);
+			_player->_updatedScore = true;
+		}
+		// UPRAVIT!!!!
+		if (bg->isBattleground())
+		{
+			if (_player->GetTeam() == HORDE && (_player->getFaction() == 1 || _player->getFaction() == 3 || _player->getFaction() == 4 || _player->getFaction() == 115 || _player->getFaction() == 1629))
+				_player->setFaction(2);
+			if (_player->GetTeam() == ALLIANCE && (_player->getFaction() == 2 || _player->getFaction() == 5 || _player->getFaction() == 6 || _player->getFaction() == 116 || _player->getFaction() == 1610))
+				_player->setFaction(1);
+		}
+
         sBattlegroundMgr->BuildBattlegroundStatusPacket(&data, bg, queueSlot, STATUS_IN_PROGRESS, 0, bg->GetStartTime(), bg->GetArenaType(), ginfo.Team);
         _player->GetSession()->SendPacket(&data);
 
@@ -466,7 +546,7 @@ void WorldSession::HandleBattleFieldPortOpcode(WorldPacket &recvData)
         // set the destination instance id
         _player->SetBattlegroundId(bg->GetInstanceID(), bgTypeId);
         // set the destination team
-        _player->SetBGTeam(ginfo.Team);
+        //_player->SetBGTeam(ginfo.Team);
 
         // bg->HandleBeforeTeleportToBattleground(_player);
         sBattlegroundMgr->SendToBattleground(_player, ginfo.IsInvitedToBGInstanceGUID, bgTypeId);
@@ -478,6 +558,17 @@ void WorldSession::HandleBattleFieldPortOpcode(WorldPacket &recvData)
     {
         if (bg->isArena() && bg->GetStatus() > STATUS_WAIT_QUEUE)
             return;
+
+        if (bg->isBattleground() && _player)
+		{
+			_player->_updatedScore = false;
+			_player->setFactionForRace(_player->getRace());
+			_player->_fakeLeader = NULL;
+			if (_player->IsAlliance())
+				_player->SetTeam(ALLIANCE);
+			else
+				_player->SetTeam(HORDE);
+		}
 
         // if player leaves rated arena match before match start, it is counted as he played but he lost
         if (ginfo.IsRated && ginfo.IsInvitedToBGInstanceGUID)

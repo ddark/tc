@@ -17,6 +17,7 @@
 
 #include "AnticheatMgr.h"
 #include "ScriptLoader.h"
+#include "World.h"
 
 //examples
 void AddSC_example_creature();
@@ -42,7 +43,7 @@ void AddSC_item_spell_scripts();
 void AddSC_example_spell_scripts();
 void AddSC_holiday_spell_scripts();
 
-void AddSC_SmartSCripts();
+void AddSC_SmartScripts();
 
 //Commands
 void AddSC_anticheat_commandscript();
@@ -99,6 +100,7 @@ void AddSC_npc_innkeeper();
 void AddSC_npcs_special();
 void AddSC_npc_taxi();
 void AddSC_achievement_scripts();
+void AddSC_action_ip_logger();
 
 //eastern kingdoms
 void AddSC_alterac_valley();                 //Alterac Valley
@@ -471,7 +473,6 @@ void AddSC_boss_xt002();
 void AddSC_boss_kologarn();
 void AddSC_boss_assembly_of_iron();
 void AddSC_boss_general_vezax();
-void AddSC_ulduar_teleporter();
 void AddSC_xt_teleporter();
 void AddSC_boss_mimiron();
 void AddSC_boss_hodir();
@@ -699,6 +700,7 @@ void AddSC_outdoorpvp_zm();
 
 // player
 void AddSC_chat_log();
+void AddSC_action_ip_logger();
 
 #endif
 
@@ -706,7 +708,7 @@ void AddScripts()
 {
     AddExampleScripts();
     AddSpellScripts();
-    AddSC_SmartSCripts();
+    AddSC_SmartScripts();
     AddCommandScripts();
     sAnticheatMgr->StartScripts();
 #ifdef SCRIPTS
@@ -809,7 +811,10 @@ void AddWorldScripts()
     AddSC_npcs_special();
     AddSC_npc_taxi();
     AddSC_achievement_scripts();
-    AddSC_chat_log();
+    AddSC_chat_log(); // location: scripts\World\chat_log.cpp
+    // To avoid duplicate code, we check once /*ONLY*/ if logging is permitted or not.
+    if (sWorld->getBoolConfig(CONFIG_IP_BASED_ACTION_LOGGING))
+        AddSC_action_ip_logger(); // location: scripts\World\action_ip_logger.cpp
 #endif
 }
 
@@ -1314,7 +1319,6 @@ void AddNorthrendScripts()
     AddSC_boss_general_vezax();
     AddSC_boss_assembly_of_iron();
     AddSC_boss_kologarn();
-    AddSC_ulduar_teleporter();
     AddSC_xt_teleporter();
     AddSC_boss_mimiron();
     AddSC_boss_hodir();
@@ -1458,6 +1462,9 @@ void AddSC_TW_trial_of_the_champion();
 void AddSC_TW_boss_thorim();
 void AddSC_TW_boss_mimiron();
 void AddSC_npc_icc_buff();
+void AddSC_evento_midsummer();
+void AddSC_ArenaWatcher();
+void AddSC_arena_top_teams();
 #endif
 
 void AddCustomScripts()
@@ -1480,5 +1487,8 @@ void AddCustomScripts()
     AddSC_TW_boss_thorim();
     AddSC_TW_boss_mimiron();
     AddSC_npc_icc_buff();
+    AddSC_evento_midsummer();
+    AddSC_ArenaWatcher();
+    AddSC_arena_top_teams();
 #endif
 }
